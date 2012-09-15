@@ -1,0 +1,26 @@
+{
+  "name": "amino-drone",
+  "version": "0.0.0",
+  "description": "drone daemon to receive deployments from amino-deploy",
+  "bin": "./bin/amino-drone",
+  "dependencies": {
+    "npm": "~1.1.61",
+    "amino": "~1.1.2",
+    "commander": "~1.0.4",
+    "formidable": "~1.0.11",
+    "middler": "~0.4.7"
+  },
+  "devDependencies": {
+    "mocha": "*"
+  },
+  "scripts": {
+    "test": "make test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/amino/amino-drone.git"
+  },
+  "homepage": "https://github.com/amino/amino-drone",
+  "author": "Carlos Rodriguez <carlos@s8f.org> (http://s8f.org/)",
+  "license": "MIT"
+}
