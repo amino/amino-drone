@@ -50,6 +50,16 @@ npm.load(function (err) {
   var ps = {}
     , deployments = {}
 
+  function findProcs (id) {
+    var ret = [];
+    Object.keys(ps).forEach(function (procId) {
+      if (!id || procId === id || ps[procId].sha1sum === id || ps[procId].commit === id) {
+        ret.push(ps[procId]);
+      }
+    });
+    return ret;
+  }
+
   middler()
     .add(function (req, res, next) {
       res.json = function json (data, status, headers) {
@@ -63,14 +73,31 @@ npm.load(function (err) {
       };
       next();
     })
-    .get('/ps', function (req, res, next) {
-
+    .get(['/ps/:id', '/ps'], function (req, res, next) {
+      var procs = findProcs(req.params.id);
+      res.json({status: 'ok', ps: procs.reduce(function (prev, proc) {
+        prev[proc.id] = proc;
+        return prev;
+      }, {})});
     })
-    .get('/ps/:id', function (req, res, next) {
-
+    .post(['/ps/:id/respawn', '/respawn'], function (req, res, next) {
+      var count = 0;
+      findProcs(req.params.id).map(function (proc) {
+        proc.respawn();
+        count++;
+      });
+      res.json({status: 'ok', count: count});
+    })
+    .delete(['/ps/:id', '/ps'], function (req, res, next) {
+      var count = 0;
+      findProcs(req.params.id).map(function (proc) {
+        proc.stop();
+        count++;
+      });
+      res.json({status: 'ok', count: count});
     })
     .get('/deployments', function (req, res, next) {
-
+      res.json({status: 'ok', deployments: Object.keys(deployments)});
     })
     .get('/deployments/:id', function (req, res, next) {
       if (typeof deployments[req.params.id] !== 'undefined' || fs.existsSync(req.params.id)) {
