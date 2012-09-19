@@ -38,7 +38,8 @@ var program = require('commander')
   .usage('[dir]')
   .option('-s, --service <name[@version]>', 'drone service to create, with optional semver (default: app-drone)', 'app-drone')
   .option('-r, --redis <port/host/host:port/list>', 'redis server(s) used by the service (can be comma-separated)', list)
-  .option('-t, --threads <count>', 'number of threads to use for deployments. (default: cpu count)', require('os').cpus().length)
+  .option('-t, --threads <count>', 'number of threads per spawn. (default: cpu count)', require('os').cpus().length)
+  .option('--maxThreads <count>', 'max number of threads per deployment. (default: cpu count)', require('os').cpus().length)
 
 program.parse(process.argv);
 
@@ -184,7 +185,14 @@ npm.load(function (err) {
       });
       form.parse(req, function (err, fields, files) {
         if (ifErr(err, 'form parse')) return;
+        var running = Object.keys(ps).reduce(function (count, id) {
+          if (ps[id].sha1sum === req.params.id) count++;
+          return count;
+        }, 0);
         var threads = parseInt(fields.threads, 10) || program.threads;
+        if (threads + running > program.maxThreads) {
+          threads = program.maxThreads - running;
+        }
         for (var i = 0; i < threads; i++) {
           var cmd = fields.cmd
             , args = JSON.parse(fields.args)
