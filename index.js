@@ -9,6 +9,8 @@ var http = require('http')
   , rimraf = require('rimraf')
   , Process = require('./lib/process')
   , idgen = require('idgen')
+  , lock = require('./lib/lock').lock
+  , unlock = require('./lib/lock').unlock
 
 function list (str) {
   return str.split(/ *, */).map(function (val) {
@@ -16,13 +18,14 @@ function list (str) {
   });
 }
 
-function ifErr (err) {
+function ifErr (err, label) {
   if (err) {
+    label || (label = 'error');
     if (err.stack) {
-      console.error(err.stack);
+      console.error(err.stack, label);
     }
     else {
-      console.error(err);
+      console.error(err, label);
     }
     process.exit(1);
   }
@@ -45,7 +48,7 @@ var dir = path.resolve(program.args[0] || process.cwd());
 process.chdir(dir);
 
 npm.load(function (err) {
-  ifErr(err);
+  ifErr(err, 'npm load');
   var server = http.createServer();
   var ps = {}
     , deployments = {}
@@ -110,17 +113,21 @@ npm.load(function (err) {
     .put('/deployments/:id', function (req, res, next) {
       console.log('receiving deployment for sha1 ' + req.params.id);
       var form = new formidable.IncomingForm();
-      function ifErr (err) {
+      function ifErr (err, label) {
         if (err) {
-          console.error(err.stack);
-          res.json({status: 'error', error: 'deployment error: ' + err.message}, 400);
+          label || (label = 'deployment error');
+          console.error(err.stack, label);
+          unlock(req.params.id, function (){});
+          res.json({status: 'error', error: label + ': ' + err.message}, 400);
           return true;
         }
       }
-      form.once('error', ifErr);
+      form.once('error', function (err) {
+        ifErr(err, 'form');
+      });
       form.hash = 'sha1';
       form.parse(req, function (err, fields, files) {
-        if (ifErr(err)) return;
+        if (ifErr(err, 'form parse')) return;
         console.log('payload received');
         if (typeof files.payload === 'undefined') {
           console.log('error: no payload uploaded');
@@ -136,16 +143,22 @@ npm.load(function (err) {
         }
 
         var tmpInstall = path.join(tmp, idgen());
-        npm.commands.install(tmpInstall, [files.payload.path], function (err) {
-          if (ifErr(err)) return;
-          fs.unlink(files.payload.path, function () {
-            if (ifErr(err)) return;
-            fs.rename(path.join(tmpInstall, 'node_modules', fields.name), req.params.id, function (err) {
-              if (ifErr(err)) return;
-              rimraf(tmpInstall, function () {
-                deployments[req.params.id] = true;
-                res.json({status: 'ok'}, 201);
-                console.log('deployed ok');
+        lock(req.params.id, function (err) {
+          ifErr(err, 'lock');
+          npm.commands.install(tmpInstall, [files.payload.path], function (err) {
+            if (ifErr(err, 'npm install')) return;
+            fs.unlink(files.payload.path, function () {
+              if (ifErr(err, 'delete upload')) return;
+              fs.rename(path.join(tmpInstall, 'node_modules', fields.name), req.params.id, function (err) {
+                if (ifErr(err, 'move deploy')) return;
+                unlock(req.params.id, function () {
+                  rimraf(tmpInstall, function (err) {
+                    if (ifErr(err, 'delete tmp')) return;
+                    deployments[req.params.id] = true;
+                    res.json({status: 'ok'}, 201);
+                    console.log('deployed ok');
+                  });
+                });
               });
             });
           });
@@ -157,17 +170,20 @@ npm.load(function (err) {
         return res.json({status: 'error', error: 'deployment not found'}, 404);
       }
       deployments[req.params.id] = true;
-      function ifErr (err) {
+      function ifErr (err, label) {
         if (err) {
-          console.error(err.stack);
-          res.json({status: 'error', error: 'spawn error: ' + err.message}, 400);
+          label || (label = 'spawn error');
+          console.error(err.stack, label);
+          res.json({status: 'error', error: label + ': ' + err.message}, 400);
           return true;
         }
       }
       var form = new formidable.IncomingForm();
-      form.once('error', ifErr);
+      form.once('error', function (err) {
+        ifErr(err, 'form');
+      });
       form.parse(req, function (err, fields, files) {
-        if (ifErr(err)) return;
+        if (ifErr(err, 'form parse')) return;
         var threads = parseInt(fields.threads, 10) || program.threads;
         for (var i = 0; i < threads; i++) {
           var cmd = fields.cmd
