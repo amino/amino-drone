@@ -1,6 +1,6 @@
 {
   "name": "amino-drone",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "drone daemon to receive deployments from amino-deploy",
   "bin": "./bin/amino-drone",
   "dependencies": {
