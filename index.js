@@ -121,6 +121,7 @@ npm.load(function (err) {
       form.hash = 'sha1';
       form.parse(req, function (err, fields, files) {
         if (ifErr(err)) return;
+        console.log('payload received');
         if (typeof files.payload === 'undefined') {
           console.log('error: no payload uploaded');
           return res.json({status: 'error', error: 'no payload uploaded'}, 400);
@@ -136,6 +137,7 @@ npm.load(function (err) {
 
         var tmpInstall = path.join(tmp, idgen());
         npm.commands.install(tmpInstall, [files.payload.path], function (err) {
+          if (ifErr(err)) return;
           fs.unlink(files.payload.path, function () {
             if (ifErr(err)) return;
             fs.rename(path.join(tmpInstall, 'node_modules', fields.name), req.params.id, function (err) {
