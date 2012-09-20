@@ -219,6 +219,55 @@ npm.load(function (err) {
         res.json({status: 'ok'}, 200);
       });
     })
+    .post('/deployments/:id/redeploy', function (req, res, next) {
+      function ifErr (err, label) {
+        if (err) {
+          label || (label = 'redeploy error');
+          console.error(err.stack, label);
+          res.json({status: 'error', error: label + ': ' + err.message}, 400);
+          return true;
+        }
+      }
+      if (!deployments[req.params.id] && !fs.existsSync(req.params.id)) {
+        return res.json({status: 'error', error: 'deployment not found'}, 404);
+      }
+      function redeploy (err, fields, files) {
+        if (ifErr(err, 'form parse')) return;
+        var count = 0;
+        Object.keys(ps).forEach(function (id) {
+          var proc = ps[id];
+          if (proc.sha1sum !== req.params.id) {
+            count++;
+            (function (proc) {
+              var prefix = 'proc#' + proc.id + ':';
+              proc.on('error', console.error.bind(console, prefix));
+              proc.on('stdout', console.log.bind(console, prefix));
+              proc.on('stderr', console.error.bind(console, prefix));
+              proc.once('exit', function () {
+                delete ps[proc.id];
+              });
+              ps[proc.id] = proc;
+            })(new Process(proc.cmd, proc.args, {
+              cwd: req.params.id,
+              env: proc.env,
+              sha1sum: req.params.id,
+              commit: fields.commit
+            }));
+            // wait a little time before shutting down to avoid service disruption
+            setTimeout(function () {
+              proc.stop();
+            }, 10000);
+          }
+        });
+        res.json({status: 'ok', count: count});
+      }
+      var form = new formidable.IncomingForm();
+      form.once('error', function (err) {
+        if (err.message && err.message.match(/no content\-type/)) return redeploy(null, {}, {});
+        ifErr(err, 'form');
+      });
+      form.parse(req, redeploy);
+    })
     .add(function (req, res, next) {
       res.json({status: 'error', error: 'resource not found'}, 404);
     })
