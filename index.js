@@ -238,6 +238,7 @@ npm.load(function (err) {
           var proc = ps[id];
           if (proc.sha1sum !== req.params.id) {
             count++;
+            proc.stop();
             (function (proc) {
               var prefix = 'proc#' + proc.id + ':';
               proc.on('error', console.error.bind(console, prefix));
@@ -253,10 +254,6 @@ npm.load(function (err) {
               sha1sum: req.params.id,
               commit: fields.commit
             }));
-            // wait a little time before shutting down to avoid service disruption
-            setTimeout(function () {
-              proc.stop();
-            }, 10000);
           }
         });
         res.json({status: 'ok', count: count});
