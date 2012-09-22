@@ -250,7 +250,7 @@ npm.load(function (err) {
               ps[proc.id] = proc;
             })(new Process(proc.cmd, proc.args, {
               cwd: req.params.id,
-              env: proc.env,
+              env: proc.options.env,
               sha1sum: req.params.id,
               commit: fields.commit
             }));
