@@ -3,8 +3,6 @@ amino-drone
 
 drone daemon to receive deployments from amino-deploy
 
-[![build status](https://secure.travis-ci.org/carlos8f/amino-drone.png)](http://travis-ci.org/carlos8f/amino-drone)
-
 - - -
 
 ### Developed by [Terra Eclipse](http://www.terraeclipse.com)
