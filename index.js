@@ -2,6 +2,7 @@ var http = require('http')
   , formidable = require('formidable')
   , npm = require('npm')
   , amino = require('amino')
+  , log = require('amino-log')
   , middler = require('middler')
   , sha1 = require('./lib/sha1')
   , path = require('path')
@@ -37,32 +38,54 @@ var program = require('commander')
   .version(require('./package').version)
   .usage('[dir]')
   .option('-s, --service <name[@version]>', 'drone service to create, with optional semver (default: app-drone)', 'app-drone')
+  .option('-h, --host <host>', 'host to expose the drone service on (default: autodetect)')
   .option('-r, --redis <port/host/host:port/list>', 'redis server(s) used by the service (can be comma-separated)', list)
   .option('-t, --threads <count>', 'number of threads per spawn. (default: cpu count)', require('os').cpus().length)
   .option('--maxThreads <count>', 'max number of threads per deployment. (default: cpu count)', require('os').cpus().length)
 
 program.parse(process.argv);
 
-amino.init({redis: program.redis});
+amino
+  .use(log)
+  .init({redis: program.redis, service: {host: program.host}})
 
 var dir = path.resolve(program.args[0] || process.cwd());
 process.chdir(dir);
 
-npm.load(function (err) {
-  ifErr(err, 'npm load');
-  var server = http.createServer();
+var server = http.createServer();
   var ps = {}
     , deployments = {}
 
-  function findProcs (id) {
-    var ret = [];
-    Object.keys(ps).forEach(function (procId) {
-      if (!id || procId === id || ps[procId].sha1sum === id || ps[procId].commit === id) {
-        ret.push(ps[procId]);
-      }
-    });
-    return ret;
-  }
+function findProcs (id) {
+  var ret = [];
+  Object.keys(ps).forEach(function (procId) {
+    if (!id || procId === id || ps[procId].sha1sum === id || ps[procId].commit === id) {
+      ret.push(ps[procId]);
+    }
+  });
+  return ret;
+}
+
+function spawn (cmd, args, options) {
+  var proc = new Process(cmd, args, options);
+  var prefix = 'proc#' + proc.id + ':';
+  proc.on('error', function (err) {
+    amino.error('%s %s', prefix, err.stack || err.message);
+  });
+  proc.on('stdout', function (data) {
+    amino.log('%s %s', prefix, data.trim());
+  });
+  proc.on('stderr', function (data) {
+    amino.error('%s %s', prefix, data.trim());
+  });
+  proc.once('exit', function (code) {
+    delete ps[proc.id];
+  });
+  ps[proc.id] = proc;
+}
+
+npm.load(function (err) {
+  ifErr(err, 'npm load');
 
   middler()
     .add(function (req, res, next) {
@@ -200,21 +223,12 @@ npm.load(function (err) {
           Object.keys(process.env).forEach(function (k) {
             if (typeof this[k] === 'undefined') this[k] = process.env[k];
           }, env);
-          (function (proc) {
-            var prefix = 'proc#' + proc.id + ':';
-            proc.on('error', console.error.bind(console, prefix));
-            proc.on('stdout', console.log.bind(console, prefix));
-            proc.on('stderr', console.error.bind(console, prefix));
-            proc.once('exit', function () {
-              delete ps[proc.id];
-            });
-            ps[proc.id] = proc;
-          })(new Process(cmd, args, {
+          spawn(cmd, args, {
             cwd: req.params.id,
             env: env,
             sha1sum: req.params.id,
             commit: fields.commit
-          }));
+          });
         }
         res.json({status: 'ok'}, 200);
       });
@@ -239,21 +253,12 @@ npm.load(function (err) {
           if (proc.sha1sum !== req.params.id) {
             count++;
             proc.stop();
-            (function (proc) {
-              var prefix = 'proc#' + proc.id + ':';
-              proc.on('error', console.error.bind(console, prefix));
-              proc.on('stdout', console.log.bind(console, prefix));
-              proc.on('stderr', console.error.bind(console, prefix));
-              proc.once('exit', function () {
-                delete ps[proc.id];
-              });
-              ps[proc.id] = proc;
-            })(new Process(proc.cmd, proc.args, {
+            spawn(proc.cmd, proc.args, {
               cwd: req.params.id,
               env: proc.options.env,
               sha1sum: req.params.id,
               commit: fields.commit
-            }));
+            });
           }
         });
         res.json({status: 'ok', count: count});
