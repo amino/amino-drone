@@ -7,7 +7,7 @@
     "npm": "~1.1.61",
     "amino": "~1.1.2",
     "commander": "~1.0.4",
-    "formidable": "~1.0.11",
+    "formidable": "git+https://github.com/felixge/node-formidable.git#64ed147b54483428157f8d94d0e74a76c8cb45fa",
     "middler": "~0.4.7",
     "rimraf": "~2.0.2",
     "idgen": "~1.1.2",
