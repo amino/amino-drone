@@ -42,6 +42,7 @@ var program = require('commander')
   .option('-r, --redis <port/host/host:port/list>', 'redis server(s) used by the service (can be comma-separated)', list)
   .option('-t, --threads <count>', 'number of threads per spawn. (default: cpu count)', require('os').cpus().length)
   .option('--maxThreads <count>', 'max number of threads per deployment. (default: cpu count)', require('os').cpus().length)
+  .option('--output <type>', 'type of log output (text or json', 'text');
 
 program.parse(process.argv);
 
@@ -70,13 +71,42 @@ function spawn (cmd, args, options) {
   var proc = new Process(cmd, args, options);
   var prefix = 'proc#' + proc.id + ':';
   proc.on('error', function (err) {
-    amino.error('%s %s', prefix, err.stack || err.message);
+    if (program.output === 'json') {
+      amino.error('{"proc#": "' + proc.id + '", "error": "' + (err.stack || err.message) + '"}');
+    }
+    else {
+      amino.error('%s %s', prefix, err.stack || err.message);
+    }
   });
   proc.on('stdout', function (data) {
-    amino.log('%s %s', prefix, data.trim());
+    if (program.output === 'json') {
+      data = data.trim();
+
+      if (data.match(/^\{.*\}$/)) {
+        amino.log('{"proc#":"' + proc.id + '",' + data.substr(1));
+      }
+      else {
+        amino.log('{"proc#": "' + proc.id + '", "data": "' + data + '"}');
+      }
+    }
+    else {
+      amino.log('%s %s', prefix, data.trim());
+    }
   });
   proc.on('stderr', function (data) {
-    amino.error('%s %s', prefix, data.trim());
+    if (program.output === 'json') {
+      data = data.trim();
+
+      if (data.match(/^\{.*\}$/)) {
+        amino.error('{"proc#":"' + proc.id + '",' + data.substr(1));
+      }
+      else {
+        amino.error('{"proc#": "' + proc.id + '", "error": "' + data + '"}');
+      }
+    }
+    else {
+      amino.error('%s %s', prefix, data.trim());
+    }
   });
   proc.once('exit', function (code) {
     delete ps[proc.id];
