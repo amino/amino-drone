@@ -82,11 +82,13 @@ function spawn (cmd, args, options) {
     if (program.output === 'json') {
       data = data.trim();
 
-      if (data.match(/^\{.*\}$/)) {
-        amino.log('{"proc#":"' + proc.id + '",' + data.substr(1));
+      if (data.match(/^\{.*\}$/m)) {
+        data.split('\n').forEach(function (str) {
+          amino.log('{"proc#":"' + proc.id + '",' + str.substr(1));
+        })
       }
       else {
-        amino.log('{"proc#": "' + proc.id + '", "data": "' + data + '"}');
+        amino.log('{"proc#": "' + proc.id + '", "data": "' + data.split('\n').join(' ') + '"}');
       }
     }
     else {
@@ -97,11 +99,13 @@ function spawn (cmd, args, options) {
     if (program.output === 'json') {
       data = data.trim();
 
-      if (data.match(/^\{.*\}$/)) {
-        amino.error('{"proc#":"' + proc.id + '",' + data.substr(1));
+      if (data.match(/^\{.*\}$/m)) {
+        data.split('\n').forEach(function (str) {
+          amino.error('{"proc#":"' + proc.id + '",' + str.substr(1));
+        })
       }
       else {
-        amino.error('{"proc#": "' + proc.id + '", "error": "' + data + '"}');
+        amino.error('{"proc#": "' + proc.id + '", "error": "' + data.split('\n').join(' ') + '"}');
       }
     }
     else {
